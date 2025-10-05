@@ -1,0 +1,25 @@
+name: iOS BuildService Tracker 
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        scheme: ['Family Planning']
+    name: Build ${{ matrix.scheme }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build ${{ matrix.scheme }}
+      run: |
+        xcodebuild clean build \
+          -project "ServiceTracker.xcodeproj" \
+          -scheme "${{ matrix.scheme }}" \
+          -destination 'generic/platform=iOS Simulator' \
+          CODE_SIGNING_ALLOWED=NO
+
