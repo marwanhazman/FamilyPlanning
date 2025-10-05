@@ -114,13 +114,10 @@ class EventDataManager: ObservableObject {
                           let timestamp = data["date"] as? Timestamp,
                           let responsiblePersonId = data["responsiblePersonId"] as? String,
                           let userId = data["userId"] as? String,
-                          let dayOfWeek = data["dayOfWeek"] as? Int,
-                          let isRecurring = data["isRecurring"] as? Bool else {
+                          let dayOfWeek = data["dayOfWeek"] as? Int else {
                         print("Invalid event data: \(data)")
                         return nil
                     }
-                    
-                    let recurrenceEndDate = data["recurrenceEndDate"] as? Timestamp
                     
                     return Event(
                         id: document.documentID,
@@ -128,9 +125,7 @@ class EventDataManager: ObservableObject {
                         eventName: eventName,
                         date: timestamp.dateValue(),
                         responsiblePersonId: responsiblePersonId,
-                        userId: userId,
-                        isRecurring: isRecurring,
-                        recurrenceEndDate: recurrenceEndDate?.dateValue()
+                        userId: userId
                     )
                 }
                 
@@ -155,40 +150,6 @@ class EventDataManager: ObservableObject {
                 print("Notification permission error: \(error)")
             }
         }
-    }
-    
-    // MARK: - Recurring Events Logic
-    private func generateRecurringEvents(for event: Event, upTo endDate: Date) -> [Event] {
-        guard event.isRecurring else { return [event] }
-        
-        let calendar = Calendar.current
-        var occurrences: [Event] = []
-        
-        // Start from the original event date
-        var currentDate = event.date
-        let recurrenceEnd = event.recurrenceEndDate ?? endDate
-        
-        // Generate occurrences until end date
-        while currentDate <= recurrenceEnd {
-            // Create a virtual event for this occurrence
-            let virtualEvent = Event(
-                id: "\(event.id)-\(currentDate.timeIntervalSince1970)", // Unique ID for each occurrence
-                personId: event.personId,
-                eventName: event.eventName,
-                date: currentDate,
-                responsiblePersonId: event.responsiblePersonId,
-                userId: event.userId,
-                isRecurring: true,
-                recurrenceEndDate: event.recurrenceEndDate
-            )
-            occurrences.append(virtualEvent)
-            
-            // Move to next week
-            guard let nextDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentDate) else { break }
-            currentDate = nextDate
-        }
-        
-        return occurrences
     }
     
     // MARK: - People Management
@@ -299,19 +260,14 @@ class EventDataManager: ObservableObject {
             return
         }
         
-        var data: [String: Any] = [
+        let data: [String: Any] = [
             "personId": event.personId,
             "eventName": event.eventName,
             "date": Timestamp(date: event.date),
             "responsiblePersonId": event.responsiblePersonId,
             "dayOfWeek": event.dayOfWeek,
-            "userId": userId,
-            "isRecurring": event.isRecurring
+            "userId": userId
         ]
-        
-        if let recurrenceEndDate = event.recurrenceEndDate {
-            data["recurrenceEndDate"] = Timestamp(date: recurrenceEndDate)
-        }
         
         db.collection("events").addDocument(data: data) { [weak self] error in
             if let error = error {
@@ -341,19 +297,14 @@ class EventDataManager: ObservableObject {
         
         let eventId = event.id
         
-        var data: [String: Any] = [
+        let data: [String: Any] = [
             "personId": event.personId,
             "eventName": event.eventName,
             "date": Timestamp(date: event.date),
             "responsiblePersonId": event.responsiblePersonId,
             "dayOfWeek": event.dayOfWeek,
-            "userId": event.userId,
-            "isRecurring": event.isRecurring
+            "userId": event.userId
         ]
-        
-        if let recurrenceEndDate = event.recurrenceEndDate {
-            data["recurrenceEndDate"] = Timestamp(date: recurrenceEndDate)
-        }
         
         db.collection("events").document(eventId).setData(data) { [weak self] error in
             if let error = error {
@@ -393,57 +344,24 @@ class EventDataManager: ObservableObject {
     }
     
     func eventsForPerson(_ personId: String) -> [Event] {
-        let calendar = Calendar.current
-        let today = Date()
-        let oneYearFromNow = calendar.date(byAdding: .year, value: 1, to: today)!
-        
-        return events.filter { $0.personId == personId }
-            .flatMap { event -> [Event] in
-                if event.isRecurring {
-                    return generateRecurringEvents(for: event, upTo: oneYearFromNow)
-                        .filter { $0.date >= today } // Only future events
-                } else {
-                    return event.date >= today ? [event] : []
-                }
-            }
-            .sorted { $0.date < $1.date }
+        events.filter { $0.personId == personId }.sorted { $0.date < $1.date }
     }
     
     func eventsForDay(_ date: Date) -> [Event] {
         let calendar = Calendar.current
-        let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: date)!
+        let targetDayOfWeek = calendar.component(.weekday, from: date)
         
-        let dayEvents = events.flatMap { event -> [Event] in
-            if event.isRecurring {
-                // Generate recurring events up to the target date + 1 year for future planning
-                let maxDate = calendar.date(byAdding: .year, value: 1, to: date)!
-                return generateRecurringEvents(for: event, upTo: maxDate)
-                    .filter { calendar.isDate($0.date, inSameDayAs: date) }
-            } else {
-                // Single event
-                return calendar.isDate(event.date, inSameDayAs: date) ? [event] : []
-            }
+        let dayEvents = events.filter { event in
+            // Check if event occurs on this day of week (for recurring)
+            event.dayOfWeek == targetDayOfWeek
         }.sorted { $0.date < $1.date }
         
-        print("Found \(dayEvents.count) events for \(date)")
+        print("Found \(dayEvents.count) events for day \(targetDayOfWeek) on date \(date)")
         return dayEvents
     }
     
     func eventsForParent(_ parentId: String) -> [Event] {
-        let calendar = Calendar.current
-        let today = Date()
-        let oneYearFromNow = calendar.date(byAdding: .year, value: 1, to: today)!
-        
-        return events.filter { $0.responsiblePersonId == parentId }
-            .flatMap { event -> [Event] in
-                if event.isRecurring {
-                    return generateRecurringEvents(for: event, upTo: oneYearFromNow)
-                        .filter { $0.date >= today } // Only future events
-                } else {
-                    return event.date >= today ? [event] : []
-                }
-            }
-            .sorted { $0.date < $1.date }
+        events.filter { $0.responsiblePersonId == parentId }.sorted { $0.date < $1.date }
     }
     
     func eventsForMonth(_ date: Date) -> [Date: [Event]] {

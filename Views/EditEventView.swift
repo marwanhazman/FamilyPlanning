@@ -11,8 +11,6 @@ struct EditEventView: View {
     @State private var eventDate = Date()
     @State private var selectedResponsiblePersonId: String?
     @State private var selectedDays: Set<Int> = []
-    @State private var isRecurring = true
-    @State private var recurrenceEndDate = Date().addingTimeInterval(60 * 60 * 24 * 365) // Default 1 year
     
     private let daysOfWeek = Calendar.current.weekdaySymbols
     
@@ -26,11 +24,6 @@ struct EditEventView: View {
             _eventDate = State(initialValue: event.date)
             _selectedResponsiblePersonId = State(initialValue: event.responsiblePersonId)
             _selectedDays = State(initialValue: [event.dayOfWeek])
-            _isRecurring = State(initialValue: event.isRecurring)
-            
-            if let recurrenceEnd = event.recurrenceEndDate {
-                _recurrenceEndDate = State(initialValue: recurrenceEnd)
-            }
         }
     }
     
@@ -63,31 +56,20 @@ struct EditEventView: View {
                     }
                 }
                 
-                Section(header: Text("Recurrence")) {
-                    Toggle("Recurring Event", isOn: $isRecurring)
-                    
-                    if isRecurring {
-                        DatePicker("Repeat Until", selection: $recurrenceEndDate, displayedComponents: .date)
-                            .disabled(!isRecurring)
-                    }
-                }
-                
-                if isRecurring {
-                    Section(header: Text("Recurring Days")) {
-                        ForEach(1...7, id: \.self) { day in
-                            HStack {
-                                Text(daysOfWeek[day - 1])
-                                Spacer()
-                                Image(systemName: selectedDays.contains(day) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(selectedDays.contains(day) ? .blue : .gray)
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if selectedDays.contains(day) {
-                                    selectedDays.remove(day)
-                                } else {
-                                    selectedDays.insert(day)
-                                }
+                Section(header: Text("Recurring Days (Weekly)")) {
+                    ForEach(1...7, id: \.self) { day in
+                        HStack {
+                            Text(daysOfWeek[day - 1])
+                            Spacer()
+                            Image(systemName: selectedDays.contains(day) ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(selectedDays.contains(day) ? .blue : .gray)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if selectedDays.contains(day) {
+                                selectedDays.remove(day)
+                            } else {
+                                selectedDays.insert(day)
                             }
                         }
                     }
@@ -125,62 +107,31 @@ struct EditEventView: View {
         !eventName.isEmpty &&
         selectedPersonId != nil &&
         selectedResponsiblePersonId != nil &&
-        (!isRecurring || !selectedDays.isEmpty)
+        !selectedDays.isEmpty
     }
     
     private func saveEvent() {
         guard let personId = selectedPersonId,
               let responsiblePersonId = selectedResponsiblePersonId else { return }
         
-        let calendar = Calendar.current
-        let timeComponents = calendar.dateComponents([.hour, .minute], from: eventDate)
-        
         if let existingEvent = event {
-            // Update existing event
-            let updatedEvent = Event(
-                id: existingEvent.id,
-                personId: personId,
-                eventName: eventName,
-                date: eventDate,
-                responsiblePersonId: responsiblePersonId,
-                userId: existingEvent.userId,
-                isRecurring: isRecurring,
-                recurrenceEndDate: isRecurring ? recurrenceEndDate : nil
-            )
-            dataManager.updateEvent(updatedEvent)
-        } else {
-            // Create new event
-            if isRecurring {
-                // Create recurring events for each selected day
-                for day in selectedDays {
-                    // Find the next occurrence of this weekday
-                    var components = DateComponents()
-                    components.weekday = day
-                    components.hour = timeComponents.hour
-                    components.minute = timeComponents.minute
-                    
-                    if let nextDate = calendar.nextDate(after: Date(), matching: components, matchingPolicy: .nextTime) {
-                        let event = Event(
-                            personId: personId,
-                            eventName: eventName,
-                            date: nextDate,
-                            responsiblePersonId: responsiblePersonId,
-                            userId: "",
-                            isRecurring: true,
-                            recurrenceEndDate: recurrenceEndDate
-                        )
-                        dataManager.addEvent(event)
-                    }
-                }
-            } else {
-                // Single event
+            // Update existing event - for simplicity, we'll remove and recreate
+            dataManager.removeEvent(existingEvent)
+        }
+        
+        // Create one event for each selected day (all recurring by default)
+        for day in selectedDays {
+            let calendar = Calendar.current
+            var components = calendar.dateComponents([.hour, .minute], from: eventDate)
+            components.weekday = day
+            
+            if let date = calendar.nextDate(after: Date(), matching: components, matchingPolicy: .nextTime) {
                 let event = Event(
                     personId: personId,
                     eventName: eventName,
-                    date: eventDate,
+                    date: date,
                     responsiblePersonId: responsiblePersonId,
-                    userId: "",
-                    isRecurring: false
+                    userId: ""
                 )
                 dataManager.addEvent(event)
             }

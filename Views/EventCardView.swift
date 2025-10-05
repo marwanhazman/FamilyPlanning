@@ -10,20 +10,11 @@ struct EventCardView: View {
     
     var body: some View {
         HStack {
-            // Color indicator with recurring icon
-            VStack {
-                if event.isRecurring {
-                    Image(systemName: "repeat.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                } else {
-                    Rectangle()
-                        .fill(person.color.color)
-                        .frame(width: 4)
-                        .cornerRadius(2)
-                }
-            }
-            .frame(width: 20)
+            // Color indicator
+            Rectangle()
+                .fill(person.color.color)
+                .frame(width: 4)
+                .cornerRadius(2)
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -48,17 +39,9 @@ struct EventCardView: View {
                     }
                 }
                 
-                HStack {
-                    Text(event.eventName)
-                        .font(.subheadline)
-                        .foregroundColor(.primary)
-                    
-                    if event.isRecurring {
-                        Image(systemName: "repeat")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                    }
-                }
+                Text(event.eventName)
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
                 
                 HStack {
                     Image(systemName: "person.fill")
@@ -69,11 +52,17 @@ struct EventCardView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    if event.isRecurring {
-                        Text("• Weekly")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                    }
+                    Text("•")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Image(systemName: "repeat")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                    
+                    Text("Weekly")
+                        .font(.caption)
+                        .foregroundColor(.blue)
                 }
             }
             .padding(.vertical, 8)
