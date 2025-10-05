@@ -1,4 +1,4 @@
-name: iOS BuildService Tracker 
+name: iOS Build Family Planning 
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
     - name: Build ${{ matrix.scheme }}
       run: |
         xcodebuild clean build \
-          -project "ServiceTracker.xcodeproj" \
+          -project "Family Planning.xcodeproj" \
           -scheme "${{ matrix.scheme }}" \
           -destination 'generic/platform=iOS Simulator' \
           CODE_SIGNING_ALLOWED=NO
